@@ -101,6 +101,27 @@
             });
         }
 
+        // [추가된 기능 1] 화면 꺼짐 방지 (Wake Lock API)
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('화면 꺼짐 방지 활성화됨');
+                }
+            } catch (err) {
+                console.error(`Wake Lock error: ${err.name}, ${err.message}`);
+            }
+        }
+        // 화면이 백그라운드로 갔다가 다시 돌아올 때 Wake Lock 재활성화
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        });
+        // 최초 실행 시 Wake Lock 요청
+        requestWakeLock();
+
         const blinds = [
             0, 50, 100, 150, 200, 250, 300, 400, 500, 600, 800,
             1000, 1200, 1600, 2000, 2400, 2800, 3200, 4000, 5000, 6000,
@@ -308,9 +329,20 @@
         ];
 
         let filteredSchedule = []; 
-        let alarmEnabled = false;
+        
+        // [추가된 기능 2] localStorage를 이용한 알람 상태 복구
+        let alarmEnabled = localStorage.getItem('savedAlarmState') === 'true';
         let lastAlarmedTime = "";
         let activeTargetBB = 12;
+
+        // 페이지 로딩 시 저장된 상태에 맞게 버튼 UI 업데이트
+        window.addEventListener('DOMContentLoaded', () => {
+            const toggleBtn = document.getElementById('toggle-btn');
+            if (alarmEnabled) {
+                toggleBtn.textContent = "알람 끄기 (현재 작동 중)";
+                toggleBtn.classList.add('active');
+            }
+        });
 
         function formatTimeStr(timeStr) {
             let [h, m] = timeStr.split(':');
@@ -496,7 +528,6 @@
             });
         }
 
-        // 2. 모바일 시스템 푸시 알림 함수
         function playAlarm(tournamentName) {
             if (!alarmEnabled) return;
             
@@ -552,13 +583,13 @@
             }
         }
 
-        // 3. 버튼 클릭 시 권한 요청 및 상태 토글
+        // 버튼 클릭 시 권한 요청 및 상태 토글 (localStorage 상태 저장 로직 추가)
         document.getElementById('toggle-btn').addEventListener('click', function() {
             if (!alarmEnabled) {
-                // 알림 권한 요청 (최초 1회 브라우저 팝업 뜸)
                 Notification.requestPermission().then(permission => {
                     if (permission === "granted") {
                         alarmEnabled = true;
+                        localStorage.setItem('savedAlarmState', 'true'); // 알람 상태 켜짐 저장
                         this.textContent = "알람 끄기 (현재 작동 중)";
                         this.classList.add('active');
                     } else {
@@ -567,6 +598,7 @@
                 });
             } else {
                 alarmEnabled = false;
+                localStorage.setItem('savedAlarmState', 'false'); // 알람 상태 꺼짐 저장
                 this.textContent = "알람 켜기 (현재 꺼짐)";
                 this.classList.remove('active');
                 document.body.classList.remove('flashing');
